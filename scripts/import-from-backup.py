@@ -278,6 +278,59 @@ def import_docs():
         return False
 
 
+def import_sessions_and_memory():
+    """导入会话和记忆数据"""
+    print()
+    print("💾 导入会话和记忆数据...")
+    
+    backup_data = BACKUP_DIR / "data"
+    
+    if not backup_data.exists():
+        print("  ℹ️  backup 中无会话/记忆数据，跳过")
+        return False
+    
+    imported = []
+    
+    # 导入会话数据库
+    sessions_backup = backup_data / "sessions.db"
+    sessions_target = HERMES_HOME / "sessions.db"
+    
+    if sessions_backup.exists():
+        # 备份现有文件
+        if sessions_target.exists():
+            backup_path = sessions_target.with_suffix(".db.bak")
+            shutil.copy(sessions_target, backup_path)
+            print(f"  📦 已备份现有 sessions.db: {backup_path}")
+        
+        shutil.copy(sessions_backup, sessions_target)
+        imported.append("sessions.db")
+        file_size = sessions_backup.stat().st_size / 1024 / 1024
+        print(f"  ✅ 已导入：sessions.db ({file_size:.1f} MB)")
+    
+    # 导入记忆数据库
+    memory_backup = backup_data / "memory.db"
+    memory_target = HERMES_HOME / "memory.db"
+    
+    if memory_backup.exists():
+        # 备份现有文件
+        if memory_target.exists():
+            backup_path = memory_target.with_suffix(".db.bak")
+            shutil.copy(memory_target, backup_path)
+            print(f"  📦 已备份现有 memory.db: {backup_path}")
+        
+        shutil.copy(memory_backup, memory_target)
+        imported.append("memory.db")
+        file_size = memory_backup.stat().st_size / 1024 / 1024
+        print(f"  ✅ 已导入：memory.db ({file_size:.1f} MB)")
+    
+    if imported:
+        print(f"  📊 共导入 {len(imported)} 个数据库文件")
+        return True
+    else:
+        print("  ℹ️  无会话/记忆数据可导入")
+        return False
+
+
 def verify_import():
     """验证导入结果"""
     print()
@@ -328,6 +381,22 @@ def verify_import():
     else:
         checks.append(("knowledgebase", False, "目录不存在"))
     
+    # 检查会话数据
+    sessions_db = HERMES_HOME / "sessions.db"
+    if sessions_db.exists():
+        file_size = sessions_db.stat().st_size / 1024 / 1024
+        checks.append(("sessions.db", True, f"已导入 ({file_size:.1f} MB)"))
+    else:
+        checks.append(("sessions.db", False, "文件不存在"))
+    
+    # 检查记忆数据
+    memory_db = HERMES_HOME / "memory.db"
+    if memory_db.exists():
+        file_size = memory_db.stat().st_size / 1024 / 1024
+        checks.append(("memory.db", True, f"已导入 ({file_size:.1f} MB)"))
+    else:
+        checks.append(("memory.db", False, "文件不存在"))
+    
     # 打印检查结果
     all_passed = True
     for name, passed, message in checks:
@@ -351,6 +420,8 @@ def print_summary():
     print(f"  - .env:        {HERMES_HOME / '.env'}")
     print(f"  - skills:      {HERMES_HOME / 'skills/'}")
     print(f"  - knowledge:   {KNOWLEDGE_BASE}")
+    print(f"  - sessions:    {HERMES_HOME / 'sessions.db'}")
+    print(f"  - memory:      {HERMES_HOME / 'memory.db'}")
     print()
     print("🚀 启动 Hermes:")
     print("  cd ~/hermes-agent")
@@ -360,7 +431,8 @@ def print_summary():
     print("📌 验证:")
     print("  1. 输入 /model 确认模型")
     print("  2. 输入 /skills list 查看技能")
-    print("  3. 测试对话功能")
+    print("  3. 输入 /sessions 查看历史会话（如有）")
+    print("  4. 测试对话功能")
     print()
     print("⚠️  安全提示:")
     print("  - .env 文件包含敏感信息，不要提交到 Git")
@@ -389,6 +461,7 @@ def main():
     results.append(("knowledgebase", import_knowledge_base()))
     results.append(("scripts", import_scripts()))
     results.append(("docs", import_docs()))
+    results.append(("sessions/memory", import_sessions_and_memory()))
     
     # 5. 验证导入
     verified = verify_import()

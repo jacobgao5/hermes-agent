@@ -223,26 +223,72 @@ def export_docs():
         return False
 
 
+def export_sessions_and_memory():
+    """导出会话和记忆数据"""
+    print()
+    print("💾 导出会话和记忆数据...")
+    
+    sessions_db = HERMES_HOME / "sessions.db"
+    memory_db = HERMES_HOME / "memory.db"
+    
+    exported = []
+    
+    # 导出会话数据库
+    if sessions_db.exists():
+        target_dir = BACKUP_DIR / "data"
+        target_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy(sessions_db, target_dir / "sessions.db")
+        exported.append("sessions.db")
+        file_size = sessions_db.stat().st_size / 1024 / 1024  # MB
+        print(f"  ✅ 已导出：sessions.db ({file_size:.1f} MB)")
+    else:
+        print("  ℹ️  sessions.db 不存在，跳过")
+    
+    # 导出记忆数据库
+    if memory_db.exists():
+        target_dir = BACKUP_DIR / "data"
+        target_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy(memory_db, target_dir / "memory.db")
+        exported.append("memory.db")
+        file_size = memory_db.stat().st_size / 1024 / 1024  # MB
+        print(f"  ✅ 已导出：memory.db ({file_size:.1f} MB)")
+    else:
+        print("  ℹ️  memory.db 不存在，跳过")
+    
+    if exported:
+        print(f"  📊 共导出 {len(exported)} 个数据库文件")
+        return True
+    else:
+        print("  ℹ️  无会话/记忆数据可导出")
+        return False
+
+
 def create_manifest():
     """创建导出清单"""
     print()
     print("📋 创建导出清单...")
     
+    # 检查是否有会话/记忆数据
+    has_sessions = (HERMES_HOME / "sessions.db").exists()
+    has_memory = (HERMES_HOME / "memory.db").exists()
+    
     manifest = {
         "export_date": datetime.now().isoformat(),
-        "hermes_version": "0.8.0+",  # 可根据实际调整
+        "hermes_version": "0.8.0+",
         "contents": {
             "config": "清理后的 config.yaml（不含 API Keys）",
             "skills": "自定义 Skills（smart-home, messaging）",
             "knowledgebase": "知识库文件（PDF, 文本）",
             "scripts": "自定义脚本",
-            "docs": "自定义文档"
+            "docs": "自定义文档",
+            "data": {
+                "sessions": "会话数据库" if has_sessions else "无",
+                "memory": "记忆数据库" if has_memory else "无"
+            }
         },
         "excluded": [
             ".env (包含 API Keys)",
             "Python 依赖 (venv/)",
-            "会话数据 (sessions.db)",
-            "记忆数据 (memory.db)",
             "Provider 配置",
             "所有 API Keys 和 Base URLs"
         ],
@@ -304,11 +350,11 @@ def print_summary():
     print("  - knowledgebase/ (知识库)")
     print("  - scripts/ (自定义脚本)")
     print("  - mydocs/ (自定义文档)")
+    print("  - data/ (会话和记忆数据，如有)")
     print()
     print("🚫 未导出（需手动配置）:")
     print("  - .env (API Keys)")
     print("  - Python 依赖")
-    print("  - 会话数据")
     print()
     print("📌 下一步:")
     print("  1. 检查 backup/ 目录内容")
@@ -337,6 +383,7 @@ def main():
     results.append(("knowledgebase", export_knowledge_base()))
     results.append(("scripts", export_scripts()))
     results.append(("docs", export_docs()))
+    results.append(("sessions/memory", export_sessions_and_memory()))
     results.append(("manifest", create_manifest()))
     results.append(("gitignore", create_gitignore()))
     
