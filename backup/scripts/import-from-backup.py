@@ -291,12 +291,27 @@ def import_sessions_and_memory():
     
     imported = []
     
-    # 导入会话数据库
+    # 导入 state.db（主要数据库）
+    state_backup = backup_data / "state.db"
+    state_target = HERMES_HOME / "state.db"
+    
+    if state_backup.exists():
+        # 备份现有文件
+        if state_target.exists():
+            backup_path = state_target.with_suffix(".db.bak")
+            shutil.copy(state_target, backup_path)
+            print(f"  📦 已备份现有 state.db: {backup_path}")
+        
+        shutil.copy(state_backup, state_target)
+        imported.append("state.db")
+        file_size = state_backup.stat().st_size / 1024 / 1024
+        print(f"  ✅ 已导入：state.db ({file_size:.1f} MB)")
+    
+    # 导入 sessions.db（如果存在）
     sessions_backup = backup_data / "sessions.db"
     sessions_target = HERMES_HOME / "sessions.db"
     
     if sessions_backup.exists():
-        # 备份现有文件
         if sessions_target.exists():
             backup_path = sessions_target.with_suffix(".db.bak")
             shutil.copy(sessions_target, backup_path)
@@ -307,12 +322,11 @@ def import_sessions_and_memory():
         file_size = sessions_backup.stat().st_size / 1024 / 1024
         print(f"  ✅ 已导入：sessions.db ({file_size:.1f} MB)")
     
-    # 导入记忆数据库
+    # 导入 memory.db（如果存在）
     memory_backup = backup_data / "memory.db"
     memory_target = HERMES_HOME / "memory.db"
     
     if memory_backup.exists():
-        # 备份现有文件
         if memory_target.exists():
             backup_path = memory_target.with_suffix(".db.bak")
             shutil.copy(memory_target, backup_path)
@@ -382,6 +396,14 @@ def verify_import():
         checks.append(("knowledgebase", False, "目录不存在"))
     
     # 检查会话数据
+    state_db = HERMES_HOME / "state.db"
+    if state_db.exists():
+        file_size = state_db.stat().st_size / 1024 / 1024
+        checks.append(("state.db", True, f"已导入 ({file_size:.1f} MB)"))
+    else:
+        checks.append(("state.db", False, "文件不存在"))
+    
+    # 检查 sessions.db（如果存在）
     sessions_db = HERMES_HOME / "sessions.db"
     if sessions_db.exists():
         file_size = sessions_db.stat().st_size / 1024 / 1024
@@ -389,7 +411,7 @@ def verify_import():
     else:
         checks.append(("sessions.db", False, "文件不存在"))
     
-    # 检查记忆数据
+    # 检查 memory.db（如果存在）
     memory_db = HERMES_HOME / "memory.db"
     if memory_db.exists():
         file_size = memory_db.stat().st_size / 1024 / 1024
@@ -420,8 +442,9 @@ def print_summary():
     print(f"  - .env:        {HERMES_HOME / '.env'}")
     print(f"  - skills:      {HERMES_HOME / 'skills/'}")
     print(f"  - knowledge:   {KNOWLEDGE_BASE}")
-    print(f"  - sessions:    {HERMES_HOME / 'sessions.db'}")
-    print(f"  - memory:      {HERMES_HOME / 'memory.db'}")
+    print(f"  - state.db:    {HERMES_HOME / 'state.db'}")
+    print(f"  - sessions:    {HERMES_HOME / 'sessions.db'} (如有)")
+    print(f"  - memory:      {HERMES_HOME / 'memory.db'} (如有)")
     print()
     print("🚀 启动 Hermes:")
     print("  cd ~/hermes-agent")
