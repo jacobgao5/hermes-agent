@@ -1,0 +1,26 @@
+{
+  "export_date": "2026-04-14T08:54:02.445063",
+  "hermes_version": "0.8.0+",
+  "contents": {
+    "config": "清理后的 config.yaml（不含 API Keys）",
+    "skills": "自定义 Skills（smart-home, messaging）",
+    "knowledgebase": "知识库文件（PDF, 文本）",
+    "scripts": "自定义脚本",
+    "docs": "自定义文档",
+    "data": {
+      "sessions": "无",
+      "memory": "无"
+    }
+  },
+  "excluded": [
+    ".env (包含 API Keys)",
+    "Python 依赖 (venv/)",
+    "Provider 配置",
+    "所有 API Keys 和 Base URLs"
+  ],
+  "next_steps": [
+    "1. 提交 backup 目录到 Git",
+    "2. 在新环境执行 scripts/import-from-backup.py",
+    "3. 根据提示输入 API Key"
+  ]
+}
