@@ -412,7 +412,47 @@ rsync -av mydocs/knowledgebase/ new-machine:~/hermes-agent/mydocs/
 
 ## 六、自动化迁移脚本
 
-创建 `scripts/export-hermes-config.py`：
+### 方式 A：使用导出/导入脚本（推荐）
+
+**1. 在旧环境导出配置：**
+
+```bash
+cd ~/hermes-agent
+python scripts/export-for-migration.py
+```
+
+脚本会自动：
+- 导出清理后的 config.yaml（不含 API Keys）
+- 导出自定义 Skills
+- 导出知识库
+- 导出自定义脚本和文档
+- 创建 manifest.json 清单
+- 所有文件保存到 `backup/` 目录
+
+**2. 提交到 Git：**
+
+```bash
+git add backup/
+git commit -m "backup: add migration files"
+git push
+```
+
+**3. 在新环境导入配置：**
+
+```bash
+cd ~/hermes-agent
+git pull
+python scripts/import-from-backup.py
+```
+
+脚本会自动：
+- 从 backup/ 目录恢复配置
+- 交互式输入 API Key
+- 创建 .env 文件（权限 600）
+- 恢复 Skills 和知识库
+- 验证导入结果
+
+### 方式 B：手动导出（备选）
 
 ```python
 #!/usr/bin/env python3
