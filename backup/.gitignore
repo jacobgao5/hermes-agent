@@ -1,0 +1,16 @@
+# Hermes Agent Backup Directory
+# 此目录包含可安全提交的配置
+# 
+# ⚠️ 提交前请确认：
+# - config.yaml 已清理敏感信息
+# - 不包含 .env 文件
+# - 不包含 API Keys
+
+# 如果包含敏感文件，请勿提交
+*.env
+*.key
+*.secret
+
+# 允许 backup/data/ 目录（覆盖根目录 .gitignore 的 data/ 规则）
+!data/
+!data/*
