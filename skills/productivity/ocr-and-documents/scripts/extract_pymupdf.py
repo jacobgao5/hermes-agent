@@ -11,6 +11,7 @@ Usage:
     python extract_pymupdf.py document.pdf --render output_dir/              # Render all pages as 2x PNG
     python extract_pymupdf.py document.pdf --render output_dir/ --pages 0-4  # Render specific pages
     python extract_pymupdf.py document.pdf --all output_dir/                 # → full_text.txt + metadata.json + renders/
+    python extract_pymupdf.py document.pdf --all output_dir/ --no-cache      # Force re-parse even if cached
 """
 import sys
 import json
@@ -87,11 +88,34 @@ def render_pages(path, output_dir, pages=None):
     print(f"Rendered {count} pages to {output_dir}/")
     doc.close()
 
-def extract_all(path, output_dir, pages=None):
+def _cache_key(path):
+    """Compute a cache key from the PDF file's path, size, and mtime."""
+    import os
+    st = os.stat(path)
+    return f"{os.path.abspath(path)}|{st.st_size}|{st.st_mtime}"
+
+def extract_all(path, output_dir, pages=None, no_cache=False):
     """Run text + metadata + renders in one pass. Saves files to output_dir.
+    Skips parsing if output_dir already contains valid cached results.
     Use --images separately for embedded images."""
     from pathlib import Path
     renders_dir = f"{output_dir}/renders"
+    cache_key_file = f"{output_dir}/.cache_key"
+
+    # Cache check
+    if not no_cache and Path(cache_key_file).exists():
+        current_key = _cache_key(path)
+        stored_key = Path(cache_key_file).read_text(encoding="utf-8").strip()
+        if current_key == stored_key and Path(f"{output_dir}/full_text.txt").exists():
+            print(json.dumps({
+                "output_dir": output_dir,
+                "metadata": f"{output_dir}/metadata.json",
+                "text": f"{output_dir}/full_text.txt",
+                "renders": renders_dir,
+                "cached": True,
+            }, indent=2))
+            return
+
     Path(renders_dir).mkdir(parents=True, exist_ok=True)
 
     doc = pymupdf.open(path)
@@ -130,6 +154,9 @@ def extract_all(path, output_dir, pages=None):
     with open(f"{output_dir}/full_text.txt", "w", encoding="utf-8") as f:
         f.write("\n\n".join(all_text_parts))
 
+    # Write cache key
+    Path(cache_key_file).write_text(_cache_key(path), encoding="utf-8")
+
     print(json.dumps({
         "output_dir": output_dir,
         "metadata": f"{output_dir}/metadata.json",
@@ -137,6 +164,7 @@ def extract_all(path, output_dir, pages=None):
         "renders": renders_dir,
         "pages_rendered": render_count,
         "text_chars": sum(len(p) for p in all_text_parts),
+        "cached": False,
     }, indent=2))
 
 def show_metadata(path):
@@ -184,7 +212,7 @@ if __name__ == "__main__":
     elif "--all" in args:
         idx = args.index("--all")
         output_dir = args[idx + 1] if idx + 1 < len(args) else "./pdf_output"
-        extract_all(path, output_dir, pages=pages)
+        extract_all(path, output_dir, pages=pages, no_cache="--no-cache" in args)
     elif "--markdown" in args:
         extract_markdown(path, pages=pages)
     else:

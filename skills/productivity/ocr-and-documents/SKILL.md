@@ -73,7 +73,10 @@ python scripts/extract_pymupdf.py document.pdf --metadata    # Title, author, pa
 python scripts/extract_pymupdf.py document.pdf --pages 0-4   # Specific pages
 python scripts/extract_pymupdf.py document.pdf --render out/ # Render pages as 2x PNG (for vision)
 python scripts/extract_pymupdf.py document.pdf --all out/    # → out/full_text.txt + out/metadata.json + out/renders/
+python scripts/extract_pymupdf.py document.pdf --all out/ --no-cache  # Force re-parse (skip cache)
 ```
+
+`--all` is **cache-aware**: if `out/` already contains results from the same PDF (matched by path + size + mtime), it skips parsing and returns the cached paths immediately. Pass `--no-cache` to force re-parse.
 
 **Fallback (if helper script unavailable)** — text only:
 ```bash
