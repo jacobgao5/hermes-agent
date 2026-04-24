@@ -8,12 +8,25 @@ Usage:
     python extract_pymupdf.py document.pdf --images output_dir/
     python extract_pymupdf.py document.pdf --tables
     python extract_pymupdf.py document.pdf --metadata
+    python extract_pymupdf.py document.pdf --render output_dir/              # Render all pages as 2x PNG
+    python extract_pymupdf.py document.pdf --render output_dir/ --pages 0-4  # Render specific pages
+    python extract_pymupdf.py document.pdf --all output_dir/                 # → full_text.txt + metadata.json + renders/
 """
 import sys
 import json
 
-def extract_text(path, pages=None):
+# PyMuPDF compatibility: older versions (≤1.23.x) use `import fitz`,
+# newer versions (≥1.24.x) use `import pymupdf`. Try both.
+try:
     import pymupdf
+    # Old versions may ship a namespace package that imports but lacks 'open'
+    if not hasattr(pymupdf, 'open'):
+        raise AttributeError
+except (ImportError, AttributeError):
+    import fitz as pymupdf
+
+
+def extract_text(path, pages=None):
     doc = pymupdf.open(path)
     page_range = range(len(doc)) if pages is None else pages
     for i in page_range:
@@ -27,7 +40,6 @@ def extract_markdown(path, pages=None):
     print(md)
 
 def extract_tables(path):
-    import pymupdf
     doc = pymupdf.open(path)
     for i, page in enumerate(doc):
         tables = page.find_tables()
@@ -37,7 +49,6 @@ def extract_tables(path):
             print(df.to_markdown(index=False))
 
 def extract_images(path, output_dir):
-    import pymupdf
     from pathlib import Path
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     doc = pymupdf.open(path)
@@ -45,16 +56,90 @@ def extract_images(path, output_dir):
     for i, page in enumerate(doc):
         for img_idx, img in enumerate(page.get_images(full=True)):
             xref = img[0]
+            smask = img[1] if len(img) > 1 else 0
             pix = pymupdf.Pixmap(doc, xref)
-            if pix.n >= 5:
+            # If the image has a soft mask (transparency), combine it
+            if smask:
+                mask = pymupdf.Pixmap(doc, smask)
+                pix = pymupdf.Pixmap(pix, mask) if pix.alpha else pix
+            # Convert CMYK (n >= 4 without alpha, n >= 5 with alpha) to RGB
+            if pix.n - pix.alpha >= 4:
                 pix = pymupdf.Pixmap(pymupdf.csRGB, pix)
             out_path = f"{output_dir}/page{i+1}_img{img_idx+1}.png"
             pix.save(out_path)
             count += 1
     print(f"Extracted {count} images to {output_dir}/")
 
+def render_pages(path, output_dir, pages=None):
+    """Render PDF pages as 2x PNG images for vision analysis."""
+    from pathlib import Path
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+    doc = pymupdf.open(path)
+    page_range = range(len(doc)) if pages is None else pages
+    count = 0
+    for i in page_range:
+        if i < len(doc):
+            page = doc[i]
+            pix = page.get_pixmap(matrix=pymupdf.Matrix(2, 2))
+            out_path = f"{output_dir}/page{i+1:02d}_render.png"
+            pix.save(out_path)
+            count += 1
+    print(f"Rendered {count} pages to {output_dir}/")
+    doc.close()
+
+def extract_all(path, output_dir, pages=None):
+    """Run text + metadata + renders in one pass. Saves files to output_dir.
+    Use --images separately for embedded images."""
+    from pathlib import Path
+    renders_dir = f"{output_dir}/renders"
+    Path(renders_dir).mkdir(parents=True, exist_ok=True)
+
+    doc = pymupdf.open(path)
+    page_range = range(len(doc)) if pages is None else pages
+
+    # Metadata → metadata.json
+    meta = {
+        "pages": len(doc),
+        "title": doc.metadata.get("title", ""),
+        "author": doc.metadata.get("author", ""),
+        "subject": doc.metadata.get("subject", ""),
+        "creator": doc.metadata.get("creator", ""),
+        "producer": doc.metadata.get("producer", ""),
+        "format": doc.metadata.get("format", ""),
+    }
+    with open(f"{output_dir}/metadata.json", "w", encoding="utf-8") as f:
+        json.dump(meta, f, indent=2, ensure_ascii=False)
+
+    # Text + renders
+    all_text_parts = []
+    render_count = 0
+    for i in page_range:
+        if i >= len(doc):
+            continue
+        page = doc[i]
+        text = page.get_text()
+        all_text_parts.append(f"--- Page {i+1}/{len(doc)} ---\n{text}")
+
+        render_pix = page.get_pixmap(matrix=pymupdf.Matrix(2, 2))
+        render_pix.save(f"{renders_dir}/page{i+1:02d}_render.png")
+        render_count += 1
+
+    doc.close()
+
+    # Text → full_text.txt
+    with open(f"{output_dir}/full_text.txt", "w", encoding="utf-8") as f:
+        f.write("\n\n".join(all_text_parts))
+
+    print(json.dumps({
+        "output_dir": output_dir,
+        "metadata": f"{output_dir}/metadata.json",
+        "text": f"{output_dir}/full_text.txt",
+        "renders": renders_dir,
+        "pages_rendered": render_count,
+        "text_chars": sum(len(p) for p in all_text_parts),
+    }, indent=2))
+
 def show_metadata(path):
-    import pymupdf
     doc = pymupdf.open(path)
     print(json.dumps({
         "pages": len(doc),
@@ -92,6 +177,14 @@ if __name__ == "__main__":
         idx = args.index("--images")
         output_dir = args[idx + 1] if idx + 1 < len(args) else "./images"
         extract_images(path, output_dir)
+    elif "--render" in args:
+        idx = args.index("--render")
+        output_dir = args[idx + 1] if idx + 1 < len(args) else "./renders"
+        render_pages(path, output_dir, pages=pages)
+    elif "--all" in args:
+        idx = args.index("--all")
+        output_dir = args[idx + 1] if idx + 1 < len(args) else "./pdf_output"
+        extract_all(path, output_dir, pages=pages)
     elif "--markdown" in args:
         extract_markdown(path, pages=pages)
     else:

@@ -1,7 +1,7 @@
 ---
 name: ocr-and-documents
 description: Extract text from PDFs and scanned documents. Use web_extract for remote URLs, pymupdf for local text-based PDFs, marker-pdf for OCR/scanned docs. For DOCX use python-docx, for PPTX see the powerpoint skill.
-version: 2.3.0
+version: 2.4.0
 author: Hermes Agent
 license: MIT
 metadata:
@@ -61,17 +61,21 @@ If the user needs marker capabilities but the system lacks ~5GB free disk:
 pip install pymupdf pymupdf4llm
 ```
 
+**IMPORTANT: Always use the helper script below. DO NOT write custom extraction scripts — the helper script covers all common use cases including text, images, metadata, page rendering, and combined extraction.**
+
 **Via helper script**:
 ```bash
 python scripts/extract_pymupdf.py document.pdf              # Plain text
 python scripts/extract_pymupdf.py document.pdf --markdown    # Markdown
 python scripts/extract_pymupdf.py document.pdf --tables      # Tables
-python scripts/extract_pymupdf.py document.pdf --images out/ # Extract images
+python scripts/extract_pymupdf.py document.pdf --images out/ # Extract embedded images
 python scripts/extract_pymupdf.py document.pdf --metadata    # Title, author, pages
 python scripts/extract_pymupdf.py document.pdf --pages 0-4   # Specific pages
+python scripts/extract_pymupdf.py document.pdf --render out/ # Render pages as 2x PNG (for vision)
+python scripts/extract_pymupdf.py document.pdf --all out/    # → out/full_text.txt + out/metadata.json + out/renders/
 ```
 
-**Inline**:
+**Fallback (if helper script unavailable)** — text only:
 ```bash
 python3 -c "
 import pymupdf
@@ -160,12 +164,11 @@ No extra dependencies needed — pymupdf covers split, merge, search, and text e
 
 ---
 
-## Notes
+## Pitfalls
 
-- `web_extract` is always first choice for URLs
-- pymupdf is the safe default — instant, no models, works everywhere
-- marker-pdf is for OCR, scanned docs, equations, complex layouts — install only when needed
-- Both helper scripts accept `--help` for full usage
-- marker-pdf downloads ~2.5GB of models to `~/.cache/huggingface/` on first use
-- For Word docs: `pip install python-docx` (better than OCR — parses actual structure)
-- For PowerPoint: see the `powerpoint` skill (uses python-pptx)
+- **DO NOT write custom extraction scripts**: The helper script `scripts/extract_pymupdf.py` already handles text, images, metadata, page rendering, and combined extraction. Writing a custom script wastes tokens, duplicates logic (often incorrectly), and produces less maintainable output. If you need something the helper script doesn't cover, extend it rather than replacing it.
+- **`doc.extract_image()` produces black/incomplete images**: Never call this directly — use the helper script's `--images` flag which uses the correct Pixmap approach (CMYK→RGB conversion + SMask merging).
+- **pymupdf4llm version incompatibility**: `pymupdf4llm` requires a matching PyMuPDF version. If you get `ImportError: cannot import name 'mupdf' from 'pymupdf'`, the versions are mismatched (e.g., PyMuPDF 1.23.8 with pymupdf4llm 1.27.x). Fall back to the direct `fitz` API (`page.get_text()` for text, Pixmap for images) — no extra dependency needed.
+- **On NixOS**: pymupdf (fitz) fails with `ImportError: libstdc++.so.6` unless `LD_LIBRARY_PATH` includes the gcc-12 lib path. Always set: `LD_LIBRARY_PATH=/nix/store/...gcc-12.2.0-lib/lib:$LD_LIBRARY_PATH`. See memory for the exact path.
+- **Always activate venv first**: `source venv/bin/activate` before running Python commands — system Python may not have pymupdf installed.
+- **Import name**: Older PyMuPDF versions use `import fitz`, newer ones use `import pymupdf`. If `import pymupdf` fails, try `import fitz`.
