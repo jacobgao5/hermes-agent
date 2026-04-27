@@ -72,11 +72,12 @@ python scripts/extract_pymupdf.py document.pdf --images out/ # Extract embedded 
 python scripts/extract_pymupdf.py document.pdf --metadata    # Title, author, pages
 python scripts/extract_pymupdf.py document.pdf --pages 0-4   # Specific pages
 python scripts/extract_pymupdf.py document.pdf --render out/ # Render pages as 2x PNG (for vision)
-python scripts/extract_pymupdf.py document.pdf --all out/    # → out/full_text.txt + out/metadata.json + out/renders/
-python scripts/extract_pymupdf.py document.pdf --all out/ --no-cache  # Force re-parse (skip cache)
+python scripts/extract_pymupdf.py document.pdf --all              # Auto-cache to ~/.hermes/.cache/ocr/<filename>/
+python scripts/extract_pymupdf.py document.pdf --all out/         # Custom output dir (not recommended, breaks cross-session cache)
+python scripts/extract_pymupdf.py document.pdf --all --no-cache   # Force re-parse ONLY when document content has changed
 ```
 
-`--all` is **cache-aware**: if `out/` already contains results from the same PDF (matched by path + size + mtime), it skips parsing and returns the cached paths immediately. Pass `--no-cache` to force re-parse.
+`--all` is **cache-aware** with automatic persistent storage: when no output directory is specified, results are cached to `~/.hermes/.cache/ocr/<filename>/` and survive across sessions. **Do NOT specify a custom output directory or `--no-cache` by default** — just use `--all` alone. Only pass `--no-cache` when the document content has actually changed.
 
 **Fallback (if helper script unavailable)** — text only:
 ```bash

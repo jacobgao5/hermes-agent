@@ -10,8 +10,9 @@ Usage:
     python extract_pymupdf.py document.pdf --metadata
     python extract_pymupdf.py document.pdf --render output_dir/              # Render all pages as 2x PNG
     python extract_pymupdf.py document.pdf --render output_dir/ --pages 0-4  # Render specific pages
-    python extract_pymupdf.py document.pdf --all output_dir/                 # → full_text.txt + metadata.json + renders/
-    python extract_pymupdf.py document.pdf --all output_dir/ --no-cache      # Force re-parse even if cached
+    python extract_pymupdf.py document.pdf --all                 # Auto-cache to ~/.hermes/.cache/ocr/<filename>/
+    python extract_pymupdf.py document.pdf --all output_dir/     # Custom output dir
+    python extract_pymupdf.py document.pdf --all output_dir/ --no-cache  # Force re-parse even if cached
 """
 import sys
 import json
@@ -87,6 +88,21 @@ def render_pages(path, output_dir, pages=None):
             count += 1
     print(f"Rendered {count} pages to {output_dir}/")
     doc.close()
+
+def _default_output_dir(path):
+    """Compute a persistent cache directory for a PDF under ~/.hermes/.cache/ocr/.
+    
+    Uses the PDF's absolute path to generate a unique directory name so that
+    results survive across sessions (unlike /tmp which gets cleaned up).
+    """
+    import os
+    from pathlib import Path
+    abs_path = os.path.abspath(path)
+    # Use stem (filename without extension) as the cache dir name
+    stem = Path(abs_path).stem
+    home = os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))
+    return str(Path(home) / ".cache" / "ocr" / stem)
+
 
 def _cache_key(path):
     """Compute a cache key from the PDF file's path, size, and mtime."""
@@ -211,7 +227,7 @@ if __name__ == "__main__":
         render_pages(path, output_dir, pages=pages)
     elif "--all" in args:
         idx = args.index("--all")
-        output_dir = args[idx + 1] if idx + 1 < len(args) else "./pdf_output"
+        output_dir = args[idx + 1] if idx + 1 < len(args) else _default_output_dir(path)
         extract_all(path, output_dir, pages=pages, no_cache="--no-cache" in args)
     elif "--markdown" in args:
         extract_markdown(path, pages=pages)

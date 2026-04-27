@@ -64,4 +64,5 @@ result
 website/static/api/skills-index.json
 
 .idx
-package-lock.json.qoder/
+package-lock.json
+.qoder/
