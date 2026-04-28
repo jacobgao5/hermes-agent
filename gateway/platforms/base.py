@@ -1118,12 +1118,13 @@ class BasePlatformAdapter(ABC):
         return lower.endswith('.gif')
 
     @staticmethod
-    def extract_images(content: str) -> Tuple[List[Tuple[str, str]], str]:
+    def extract_images(content: str) -> Tuple[List[Tuple[str, str]], List[Tuple[str, str]], str]:
         """
-        Extract image URLs from markdown and HTML image tags in a response.
+        Extract image URLs and local file paths from markdown and HTML image tags.
         
         Finds patterns like:
-        - ![alt text](https://example.com/image.png)
+        - ![alt text](https://example.com/image.png)   → URL image
+        - ![alt text](/local/path/image.png)           → local file image
         - <img src="https://example.com/image.png">
         - <img src="https://example.com/image.png"></img>
         
@@ -1131,39 +1132,63 @@ class BasePlatformAdapter(ABC):
             content: The response text to scan.
         
         Returns:
-            Tuple of (list of (url, alt_text) pairs, cleaned content with image tags removed).
+            Tuple of (url_images, local_images, cleaned content with image tags removed).
+            url_images:  list of (url, alt_text) pairs for HTTP(S) URLs.
+            local_images: list of (path, alt_text) pairs for local file paths.
         """
-        images = []
+        url_images = []
+        local_images = []
         cleaned = content
         
-        # Match markdown images: ![alt](url)
-        md_pattern = r'!\[([^\]]*)\]\((https?://[^\s\)]+)\)'
-        for match in re.finditer(md_pattern, content):
+        # Match markdown images: ![alt](url_or_path)
+        md_url_pattern = r'!\[([^\]]*)\]\((https?://[^\s\)]+)\)'
+        md_local_pattern = r'!\[([^\]]*)\]\((/[\w.\-]/?[^\s\)]*|~/[^\s\)]+)\)'
+
+        _IMAGE_EXTS = ('.png', '.jpg', '.jpeg', '.gif', '.webp')
+        _IMAGE_HOST_SUBSTRS = ('fal.media', 'fal-cdn', 'replicate.delivery')
+
+        # Extract HTTP(S) URL images
+        for match in re.finditer(md_url_pattern, content):
             alt_text = match.group(1)
             url = match.group(2)
-            # Only extract URLs that look like actual images
             if any(url.lower().endswith(ext) or ext in url.lower() for ext in
-                   ['.png', '.jpg', '.jpeg', '.gif', '.webp', 'fal.media', 'fal-cdn', 'replicate.delivery']):
-                images.append((url, alt_text))
-        
+                   [*_IMAGE_EXTS, *_IMAGE_HOST_SUBSTRS]):
+                url_images.append((url, alt_text))
+
+        # Extract local file path images from markdown
+        for match in re.finditer(md_local_pattern, content):
+            alt_text = match.group(1)
+            path = match.group(2)
+            expanded = os.path.expanduser(path)
+            if any(expanded.lower().endswith(ext) for ext in _IMAGE_EXTS) and os.path.isfile(expanded):
+                local_images.append((expanded, alt_text))
+
         # Match HTML img tags: <img src="url"> or <img src="url"></img> or <img src="url"/>
         html_pattern = r'<img\s+src=["\']?(https?://[^\s"\'<>]+)["\']?\s*/?>\s*(?:</img>)?'
         for match in re.finditer(html_pattern, content):
             url = match.group(1)
-            images.append((url, ""))
-        
-        # Remove only the matched image tags from content (not all markdown images)
-        if images:
-            extracted_urls = {url for url, _ in images}
+            url_images.append((url, ""))
+
+        # Remove matched image markdown / HTML from content
+        all_extracted = url_images or local_images
+        if all_extracted:
+            extracted_urls = {url for url, _ in url_images}
+            extracted_paths = {path for path, _ in local_images}
             def _remove_if_extracted(match):
-                url = match.group(2) if match.lastindex >= 2 else match.group(1)
-                return '' if url in extracted_urls else match.group(0)
-            cleaned = re.sub(md_pattern, _remove_if_extracted, cleaned)
+                url_or_path = match.group(2) if match.lastindex >= 2 else match.group(1)
+                if url_or_path in extracted_urls:
+                    return ''
+                # Compare expanded path for local file matches (handles ~ shorthand)
+                if os.path.expanduser(url_or_path) in extracted_paths:
+                    return ''
+                return match.group(0)
+            cleaned = re.sub(md_url_pattern, _remove_if_extracted, cleaned)
+            cleaned = re.sub(md_local_pattern, _remove_if_extracted, cleaned)
             cleaned = re.sub(html_pattern, _remove_if_extracted, cleaned)
             # Clean up leftover blank lines
             cleaned = re.sub(r'\n{3,}', '\n\n', cleaned).strip()
         
-        return images, cleaned
+        return url_images, local_images, cleaned
     
     async def send_voice(
         self,
@@ -1715,13 +1740,15 @@ class BasePlatformAdapter(ABC):
                 # Extract MEDIA:<path> tags (from TTS tool) before other processing
                 media_files, response = self.extract_media(response)
                 
-                # Extract image URLs and send them as native platform attachments
-                images, text_content = self.extract_images(response)
+                # Extract image URLs and local file paths; send them as native platform attachments
+                url_images, local_md_images, text_content = self.extract_images(response)
                 # Strip any remaining internal directives from message body (fixes #1561)
                 text_content = text_content.replace("[[audio_as_voice]]", "").strip()
                 text_content = re.sub(r"MEDIA:\s*\S+", "", text_content).strip()
-                if images:
-                    logger.info("[%s] extract_images found %d image(s) in response (%d chars)", self.name, len(images), len(response))
+                if url_images:
+                    logger.info("[%s] extract_images found %d URL image(s) in response (%d chars)", self.name, len(url_images), len(response))
+                if local_md_images:
+                    logger.info("[%s] extract_images found %d local image(s) in response", self.name, len(local_md_images))
 
                 # Auto-detect bare local file paths for native media delivery
                 # (helps small models that don't use MEDIA: syntax)
@@ -1779,10 +1806,10 @@ class BasePlatformAdapter(ABC):
                 # Human-like pacing delay between text and media
                 human_delay = self._get_human_delay()
 
-                # Send extracted images as native attachments
-                if images:
-                    logger.info("[%s] Extracted %d image(s) to send as attachments", self.name, len(images))
-                for image_url, alt_text in images:
+                # Send extracted URL images as native attachments
+                if url_images:
+                    logger.info("[%s] Extracted %d URL image(s) to send as attachments", self.name, len(url_images))
+                for image_url, alt_text in url_images:
                     if human_delay > 0:
                         await asyncio.sleep(human_delay)
                     try:
@@ -1811,6 +1838,28 @@ class BasePlatformAdapter(ABC):
                             logger.error("[%s] Failed to send image: %s", self.name, img_result.error)
                     except Exception as img_err:
                         logger.error("[%s] Error sending image: %s", self.name, img_err, exc_info=True)
+
+                # Send local markdown images (![desc](/local/path)) as native attachments
+                for image_path, alt_text in local_md_images:
+                    if human_delay > 0:
+                        await asyncio.sleep(human_delay)
+                    try:
+                        logger.info(
+                            "[%s] Sending local image: %s (alt=%s)",
+                            self.name,
+                            image_path,
+                            alt_text[:30] if alt_text else "",
+                        )
+                        img_result = await self.send_image_file(
+                            chat_id=event.source.chat_id,
+                            image_path=image_path,
+                            caption=alt_text if alt_text else None,
+                            metadata=_thread_metadata,
+                        )
+                        if not img_result.success:
+                            logger.error("[%s] Failed to send local image: %s", self.name, img_result.error)
+                    except Exception as img_err:
+                        logger.error("[%s] Error sending local image: %s", self.name, img_err, exc_info=True)
 
                 # Send extracted media files — route by file type
                 _AUDIO_EXTS = {'.ogg', '.opus', '.mp3', '.wav', '.m4a'}

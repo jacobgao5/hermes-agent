@@ -5540,7 +5540,7 @@ class GatewayRunner:
 
         try:
             media_files, _ = adapter.extract_media(response)
-            _, cleaned = adapter.extract_images(response)
+            _, _, cleaned = adapter.extract_images(response)
             local_files, _ = adapter.extract_local_files(cleaned)
 
             _thread_meta = {"thread_id": event.source.thread_id} if event.source.thread_id else None
@@ -5767,7 +5767,7 @@ class GatewayRunner:
             # Extract media files from the response
             if response:
                 media_files, response = adapter.extract_media(response)
-                images, text_content = adapter.extract_images(response)
+                url_images, local_md_images, text_content = adapter.extract_images(response)
 
                 preview = prompt[:60] + ("..." if len(prompt) > 60 else "")
                 header = f'✅ Background task complete\nPrompt: "{preview}"\n\n'
@@ -5778,19 +5778,30 @@ class GatewayRunner:
                         content=header + text_content,
                         metadata=_thread_metadata,
                     )
-                elif not images and not media_files:
+                elif not url_images and not local_md_images and not media_files:
                     await adapter.send(
                         chat_id=source.chat_id,
                         content=header + "(No response generated)",
                         metadata=_thread_metadata,
                     )
 
-                # Send extracted images
-                for image_url, alt_text in (images or []):
+                # Send extracted URL images
+                for image_url, alt_text in (url_images or []):
                     try:
                         await adapter.send_image(
                             chat_id=source.chat_id,
                             image_url=image_url,
+                            caption=alt_text,
+                        )
+                    except Exception:
+                        pass
+
+                # Send extracted local markdown images
+                for image_path, alt_text in (local_md_images or []):
+                    try:
+                        await adapter.send_image_file(
+                            chat_id=source.chat_id,
+                            image_path=image_path,
                             caption=alt_text,
                         )
                     except Exception:
@@ -5952,7 +5963,7 @@ class GatewayRunner:
                 response = "(No response generated)"
 
             media_files, response = adapter.extract_media(response)
-            images, text_content = adapter.extract_images(response)
+            url_images, local_md_images, text_content = adapter.extract_images(response)
             preview = question[:60] + ("..." if len(question) > 60 else "")
             header = f'💬 /btw: "{preview}"\n\n'
 
@@ -5962,16 +5973,22 @@ class GatewayRunner:
                     content=header + text_content,
                     metadata=_thread_meta,
                 )
-            elif not images and not media_files:
+            elif not url_images and not local_md_images and not media_files:
                 await adapter.send(
                     chat_id=source.chat_id,
                     content=header + "(No response generated)",
                     metadata=_thread_meta,
                 )
 
-            for image_url, alt_text in (images or []):
+            for image_url, alt_text in (url_images or []):
                 try:
                     await adapter.send_image(chat_id=source.chat_id, image_url=image_url, caption=alt_text)
+                except Exception:
+                    pass
+
+            for image_path, alt_text in (local_md_images or []):
+                try:
+                    await adapter.send_image_file(chat_id=source.chat_id, image_path=image_path, caption=alt_text)
                 except Exception:
                     pass
 

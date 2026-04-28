@@ -124,117 +124,119 @@ class TestMessageEventGetCommandArgs:
 
 class TestExtractImages:
     def test_no_images(self):
-        images, cleaned = BasePlatformAdapter.extract_images("Just regular text.")
-        assert images == []
+        url_images, local_images, cleaned = BasePlatformAdapter.extract_images("Just regular text.")
+        assert url_images == []
+        assert local_images == []
         assert cleaned == "Just regular text."
 
     def test_markdown_image_with_image_ext(self):
         content = "Here is a photo: ![cat](https://example.com/cat.png)"
-        images, cleaned = BasePlatformAdapter.extract_images(content)
-        assert len(images) == 1
-        assert images[0][0] == "https://example.com/cat.png"
-        assert images[0][1] == "cat"
+        url_images, local_images, cleaned = BasePlatformAdapter.extract_images(content)
+        assert len(url_images) == 1
+        assert url_images[0][0] == "https://example.com/cat.png"
+        assert url_images[0][1] == "cat"
         assert "![cat]" not in cleaned
 
     def test_markdown_image_jpg(self):
         content = "![photo](https://example.com/photo.jpg)"
-        images, _ = BasePlatformAdapter.extract_images(content)
-        assert len(images) == 1
-        assert images[0][0] == "https://example.com/photo.jpg"
-        assert images[0][1] == "photo"
+        url_images, _, _ = BasePlatformAdapter.extract_images(content)
+        assert len(url_images) == 1
+        assert url_images[0][0] == "https://example.com/photo.jpg"
+        assert url_images[0][1] == "photo"
 
     def test_markdown_image_jpeg(self):
         content = "![](https://example.com/photo.jpeg)"
-        images, _ = BasePlatformAdapter.extract_images(content)
-        assert len(images) == 1
-        assert images[0][0] == "https://example.com/photo.jpeg"
-        assert images[0][1] == ""
+        url_images, _, _ = BasePlatformAdapter.extract_images(content)
+        assert len(url_images) == 1
+        assert url_images[0][0] == "https://example.com/photo.jpeg"
+        assert url_images[0][1] == ""
 
     def test_markdown_image_gif(self):
         content = "![anim](https://example.com/anim.gif)"
-        images, _ = BasePlatformAdapter.extract_images(content)
-        assert len(images) == 1
-        assert images[0][0] == "https://example.com/anim.gif"
-        assert images[0][1] == "anim"
+        url_images, _, _ = BasePlatformAdapter.extract_images(content)
+        assert len(url_images) == 1
+        assert url_images[0][0] == "https://example.com/anim.gif"
+        assert url_images[0][1] == "anim"
 
     def test_markdown_image_webp(self):
         content = "![](https://example.com/img.webp)"
-        images, _ = BasePlatformAdapter.extract_images(content)
-        assert len(images) == 1
-        assert images[0][0] == "https://example.com/img.webp"
-        assert images[0][1] == ""
+        url_images, _, _ = BasePlatformAdapter.extract_images(content)
+        assert len(url_images) == 1
+        assert url_images[0][0] == "https://example.com/img.webp"
+        assert url_images[0][1] == ""
 
     def test_fal_media_cdn(self):
         content = "![gen](https://fal.media/files/abc123/output.png)"
-        images, _ = BasePlatformAdapter.extract_images(content)
-        assert len(images) == 1
-        assert images[0][0] == "https://fal.media/files/abc123/output.png"
-        assert images[0][1] == "gen"
+        url_images, _, _ = BasePlatformAdapter.extract_images(content)
+        assert len(url_images) == 1
+        assert url_images[0][0] == "https://fal.media/files/abc123/output.png"
+        assert url_images[0][1] == "gen"
 
     def test_fal_cdn_url(self):
         content = "![](https://fal-cdn.example.com/result)"
-        images, _ = BasePlatformAdapter.extract_images(content)
-        assert len(images) == 1
-        assert images[0][0] == "https://fal-cdn.example.com/result"
-        assert images[0][1] == ""
+        url_images, _, _ = BasePlatformAdapter.extract_images(content)
+        assert len(url_images) == 1
+        assert url_images[0][0] == "https://fal-cdn.example.com/result"
+        assert url_images[0][1] == ""
 
     def test_replicate_delivery(self):
         content = "![](https://replicate.delivery/pbxt/abc/output)"
-        images, _ = BasePlatformAdapter.extract_images(content)
-        assert len(images) == 1
-        assert images[0][0] == "https://replicate.delivery/pbxt/abc/output"
-        assert images[0][1] == ""
+        url_images, _, _ = BasePlatformAdapter.extract_images(content)
+        assert len(url_images) == 1
+        assert url_images[0][0] == "https://replicate.delivery/pbxt/abc/output"
+        assert url_images[0][1] == ""
 
     def test_non_image_ext_not_extracted(self):
         """Markdown image with non-image extension should not be extracted."""
         content = "![doc](https://example.com/report.pdf)"
-        images, cleaned = BasePlatformAdapter.extract_images(content)
-        assert images == []
+        url_images, local_images, cleaned = BasePlatformAdapter.extract_images(content)
+        assert url_images == []
         assert "![doc]" in cleaned  # Should be preserved
 
     def test_html_img_tag(self):
         content = 'Check this: <img src="https://example.com/photo.png">'
-        images, cleaned = BasePlatformAdapter.extract_images(content)
-        assert len(images) == 1
-        assert images[0][0] == "https://example.com/photo.png"
-        assert images[0][1] == ""  # HTML images have no alt text
+        url_images, local_images, cleaned = BasePlatformAdapter.extract_images(content)
+        assert len(url_images) == 1
+        assert url_images[0][0] == "https://example.com/photo.png"
+        assert url_images[0][1] == ""  # HTML images have no alt text
         assert "<img" not in cleaned
 
     def test_html_img_self_closing(self):
         content = '<img src="https://example.com/photo.png"/>'
-        images, _ = BasePlatformAdapter.extract_images(content)
-        assert len(images) == 1
-        assert images[0][0] == "https://example.com/photo.png"
-        assert images[0][1] == ""
+        url_images, _, _ = BasePlatformAdapter.extract_images(content)
+        assert len(url_images) == 1
+        assert url_images[0][0] == "https://example.com/photo.png"
+        assert url_images[0][1] == ""
 
     def test_html_img_with_closing_tag(self):
         content = '<img src="https://example.com/photo.png"></img>'
-        images, _ = BasePlatformAdapter.extract_images(content)
-        assert len(images) == 1
-        assert images[0][0] == "https://example.com/photo.png"
-        assert images[0][1] == ""
+        url_images, _, _ = BasePlatformAdapter.extract_images(content)
+        assert len(url_images) == 1
+        assert url_images[0][0] == "https://example.com/photo.png"
+        assert url_images[0][1] == ""
 
     def test_multiple_images(self):
         content = "![a](https://example.com/a.png)\n![b](https://example.com/b.jpg)"
-        images, cleaned = BasePlatformAdapter.extract_images(content)
-        assert len(images) == 2
+        url_images, local_images, cleaned = BasePlatformAdapter.extract_images(content)
+        assert len(url_images) == 2
         assert "![a]" not in cleaned
         assert "![b]" not in cleaned
 
     def test_mixed_markdown_and_html(self):
         content = '![cat](https://example.com/cat.png)\n<img src="https://example.com/dog.jpg">'
-        images, _ = BasePlatformAdapter.extract_images(content)
-        assert len(images) == 2
+        url_images, _, _ = BasePlatformAdapter.extract_images(content)
+        assert len(url_images) == 2
 
     def test_cleaned_content_trims_excess_newlines(self):
         content = "Before\n\n![img](https://example.com/img.png)\n\n\n\nAfter"
-        _, cleaned = BasePlatformAdapter.extract_images(content)
+        _, _, cleaned = BasePlatformAdapter.extract_images(content)
         assert "\n\n\n" not in cleaned
 
     def test_non_http_url_not_matched(self):
         content = "![file](file:///local/path.png)"
-        images, _ = BasePlatformAdapter.extract_images(content)
-        assert images == []
+        url_images, local_images, _ = BasePlatformAdapter.extract_images(content)
+        assert url_images == []
+        assert local_images == []
 
     def test_non_image_link_preserved_when_mixed_with_images(self):
         """Regression: non-image markdown links must not be silently removed
@@ -243,11 +245,51 @@ class TestExtractImages:
             "Here is the image: ![photo](https://fal.media/cat.png)\n"
             "And a doc: ![report](https://example.com/report.pdf)"
         )
-        images, cleaned = BasePlatformAdapter.extract_images(content)
-        assert len(images) == 1
-        assert images[0][0] == "https://fal.media/cat.png"
+        url_images, local_images, cleaned = BasePlatformAdapter.extract_images(content)
+        assert len(url_images) == 1
+        assert url_images[0][0] == "https://fal.media/cat.png"
         # The PDF link must survive in cleaned content
         assert "![report](https://example.com/report.pdf)" in cleaned
+
+    def test_local_path_image(self):
+        """Markdown image with local file path should be extracted into local_images."""
+        import tempfile, os
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            tmp_path = f.name
+        try:
+            url_images, local_images, cleaned = BasePlatformAdapter.extract_images(
+                f"See diagram: ![wiring]({tmp_path})"
+            )
+            assert url_images == []
+            assert len(local_images) == 1
+            assert local_images[0][0] == tmp_path
+            assert local_images[0][1] == "wiring"
+            assert "![wiring]" not in cleaned
+        finally:
+            os.unlink(tmp_path)
+
+    def test_local_path_image_nonexistent_file(self):
+        """Local path that doesn't exist on disk should not be extracted."""
+        url_images, local_images, cleaned = BasePlatformAdapter.extract_images(
+            "![missing](/nonexistent/path/image.png)"
+        )
+        assert url_images == []
+        assert local_images == []
+        assert "![missing]" in cleaned
+
+    def test_local_path_image_non_image_ext(self):
+        """Local path with non-image extension should not be extracted."""
+        import tempfile, os
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            tmp_path = f.name
+        try:
+            url_images, local_images, cleaned = BasePlatformAdapter.extract_images(
+                f"![doc]({tmp_path})"
+            )
+            assert local_images == []
+            assert "![doc]" in cleaned
+        finally:
+            os.unlink(tmp_path)
 
 
 # ---------------------------------------------------------------------------
